@@ -33,9 +33,17 @@ fabricApi {
 sourceSets {
     main {
         resources {
-            srcDir "/src/main/generated"
+            srcDir "src/main/generated"
         }
     }
+}
+
+processResources {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.withType(Jar) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 dependencies {
