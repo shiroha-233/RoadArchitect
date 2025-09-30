@@ -161,6 +161,11 @@ subprojects {
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
 
+    // 为所有复制任务设置重复处理策略
+    tasks.withType(Copy) {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
+
     // ---- groupId: добавляем сегмент по лоадеру (common/fabric/neoforge/quilt)
     def baseGroup = rootProject.maven_group
     def platforms = ["common", "fabric", "neoforge"]

@@ -96,6 +96,8 @@ remapJar {
 }
 
 // =========== Modrith =========
+// 暂时禁用 Modrinth 发布功能以便构建
+/*
 apply plugin: "com.modrinth.minotaur"
 def modrinth_token = rootProject.ext.resolveModrinthToken()
 if (!modrinth_token) throw new GradleException("Set MODRINTH_TOKEN env or in .env")
@@ -112,8 +114,11 @@ modrinth {
     changelog     = rootProject.file("CHANGELOG.md").exists() ? rootProject.file("CHANGELOG.md").text : ""
     dependencies { required.project "cloth-config" }
 }
+*/
 
 // ====================== CurseForge ====================
+// 暂时禁用 CurseForge 发布功能以便构建
+/*
 apply plugin: "net.darkhax.curseforgegradle"
 
 def curse_token = rootProject.ext.resolveCurseforgeToken()
@@ -146,3 +151,4 @@ tasks.register("curseforge", net.darkhax.curseforgegradle.TaskPublishCurseForge)
     mainFile.addRequirement("cloth-config")
     mainFile.addOptional("catalogue")
 }
+*/

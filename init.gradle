@@ -1,0 +1,64 @@
+allprojects {
+    repositories {
+        all { ArtifactRepository repo ->
+            if (repo instanceof MavenArtifactRepository) {
+                def url = repo.url.toString()
+                if (url.contains('maven.fabricmc.net')) {
+                    remove repo
+                }
+                if (url.contains('maven.architectury.dev')) {
+                    remove repo
+                }
+                if (url.contains('files.minecraftforge.net')) {
+                    remove repo
+                }
+                if (url.contains('maven.wispforest.io')) {
+                    remove repo
+                }
+                if (url.contains('maven.terraformersmc.com')) {
+                    remove repo
+                }
+                if (url.contains('maven.shedaniel.me')) {
+                    remove repo
+                }
+                if (url.contains('repo.maven.apache.org')) {
+                    remove repo
+                }
+                if (url.contains('repo1.maven.org')) {
+                    remove repo
+                }
+            }
+        }
+        
+        // 阿里云镜像
+        maven { url 'https://maven.aliyun.com/repository/public/' }
+        maven { url 'https://maven.aliyun.com/repository/central/' }
+        maven { url 'https://maven.aliyun.com/repository/google/' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin/' }
+        
+        // 原始仓库作为备用
+        maven { url 'https://maven.fabricmc.net/' }
+        maven { url 'https://maven.architectury.dev/' }
+        maven { url 'https://files.minecraftforge.net/maven/' }
+        maven { url 'https://maven.wispforest.io' }
+        maven { url 'https://maven.terraformersmc.com/' }
+        maven { url 'https://maven.shedaniel.me/' }
+        
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    
+    buildscript {
+        repositories {
+            maven { url 'https://maven.aliyun.com/repository/public/' }
+            maven { url 'https://maven.aliyun.com/repository/central/' }
+            maven { url 'https://maven.aliyun.com/repository/google/' }
+            maven { url 'https://maven.aliyun.com/repository/gradle-plugin/' }
+            maven { url 'https://maven.fabricmc.net/' }
+            maven { url 'https://maven.architectury.dev/' }
+            maven { url 'https://files.minecraftforge.net/maven/' }
+            mavenCentral()
+            gradlePluginPortal()
+        }
+    }
+}

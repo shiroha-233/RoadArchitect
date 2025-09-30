@@ -9,14 +9,21 @@ import net.minecraft.world.PersistentState;
 import net.oxcodsnet.roadarchitect.RoadArchitect;
 import net.oxcodsnet.roadarchitect.storage.components.Node;
 import net.oxcodsnet.roadarchitect.util.GeometryUtils;
+import net.oxcodsnet.roadarchitect.util.GraphConnectivityAlgorithm;
+import net.oxcodsnet.roadarchitect.util.GraphConnectivityMode;
 import net.oxcodsnet.roadarchitect.util.KeyUtil;
 import net.oxcodsnet.roadarchitect.util.PersistentStateUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 /**
  * Сохраняет узлы и рёбра дорог как {@link PersistentState}.
  * <p>Stores road nodes and edges as a {@link PersistentState}.</p>
  */
 public class RoadGraphState extends PersistentState {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RoadArchitect.MOD_ID + "/RoadGraphState");
     private static final String KEY = "road_graph";
     private static final String NODES_KEY = "nodes";
     private static final String EDGES_KEY = "edges";
@@ -94,13 +101,92 @@ public class RoadGraphState extends PersistentState {
      */
     public Node addNodeWithEdges(BlockPos pos, String type) {
         Node newNode = this.nodeStorage.add(pos, type);
-        for (Node other : this.nodeStorage.all().values()) {
-            if (!other.id().equals(newNode.id())) {
-                connect(newNode, other);
-            }
-        }
+        // 使用新的蜂窝状连接算法重新计算所有连接
+        rebuildEdgesWithHoneycombAlgorithm();
         this.markDirty();
         return newNode;
+    }
+
+    /**
+     * 使用稀疏算法重新构建所有边。
+     * 清除现有边并使用增强型 MST 算法重新连接。
+     * 
+     * <p>Rebuilds all edges using sparse algorithm.
+     * Clears existing edges and reconnects using Enhanced MST algorithm.</p>
+     */
+    public void rebuildEdgesWithHoneycombAlgorithm() {
+        rebuildEdgesWithAlgorithm(GraphConnectivityMode.ENHANCED_MST);
+    }
+
+    /**
+     * 使用指定算法重新构建所有边。
+     * 
+     * <p>Rebuilds all edges using the specified algorithm.</p>
+     * 
+     * @param mode 连接算法模式
+     */
+    public void rebuildEdgesWithAlgorithm(GraphConnectivityMode mode) {
+        LOGGER.info("Rebuilding road network using {} algorithm", mode.getDisplayName());
+        
+        // 保存现有边的状态
+        var existingStatuses = edgeStorage.allWithStatus();
+        int oldEdgeCount = existingStatuses.size();
+        
+        // 清除所有边（但保留节点）
+        edgeStorage.clear();
+        
+        // 根据模式选择算法
+        List<GraphConnectivityAlgorithm.NodePair> newEdges;
+        double maxDist = edgeStorage.radius() * 2.0;
+        
+        switch (mode) {
+            case MST -> newEdges = GraphConnectivityAlgorithm.computeMinimumSpanningTree(
+                nodeStorage.all(), maxDist);
+            case ENHANCED_MST -> newEdges = GraphConnectivityAlgorithm.computeEnhancedMST(
+                nodeStorage.all(), maxDist, 0.2); // 增加 20% 的短边
+            default -> {
+                LOGGER.warn("Unknown connectivity mode: {}, using ENHANCED_MST", mode);
+                newEdges = GraphConnectivityAlgorithm.computeEnhancedMST(
+                    nodeStorage.all(), maxDist, 0.2);
+            }
+        }
+        
+        // 添加新边，并尝试恢复之前的状态
+        int addedCount = 0;
+        int restoredCount = 0;
+        
+        for (GraphConnectivityAlgorithm.NodePair pair : newEdges) {
+            // MST 算法已经保证不会有交叉，直接添加
+            String edgeKey = pair.edgeKey();
+            edgeStorage.add(pair.nodeA(), pair.nodeB());
+            addedCount++;
+            
+            // 如果这条边之前存在，恢复其状态
+            if (existingStatuses.containsKey(edgeKey)) {
+                edgeStorage.setStatus(edgeKey, existingStatuses.get(edgeKey));
+                restoredCount++;
+            }
+        }
+        
+        LOGGER.info("Network rebuild complete: {} -> {} edges ({} restored)", 
+            oldEdgeCount, addedCount, restoredCount);
+    }
+
+    /**
+     * 检查新边是否会与现有边交叉。
+     */
+    private boolean wouldIntersectExistingEdges(Node nodeA, Node nodeB) {
+        for (EdgeStorage.Edge e : edgeStorage.all().values()) {
+            if (e.connects(nodeA.id()) || e.connects(nodeB.id())) continue;
+            Node n1 = nodeStorage.all().get(e.nodeA());
+            Node n2 = nodeStorage.all().get(e.nodeB());
+            if (n1 == null || n2 == null) continue;
+
+            if (GeometryUtils.segmentsIntersect2D(nodeA.pos(), nodeB.pos(), n1.pos(), n2.pos())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
