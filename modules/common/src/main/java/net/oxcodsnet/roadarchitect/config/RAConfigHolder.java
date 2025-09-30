@@ -52,7 +52,12 @@ public final class RAConfigHolder {
 
         @Override
         public int maxConnectionDistance() {
-            return 715;
+            return 400;
+        }
+
+        @Override
+        public int maxNearestConnections() {
+            return 3;
         }
 
         @Override

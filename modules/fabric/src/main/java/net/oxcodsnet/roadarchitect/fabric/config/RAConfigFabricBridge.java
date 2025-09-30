@@ -41,6 +41,11 @@ public final class RAConfigFabricBridge {
             }
 
             @Override
+            public int maxNearestConnections() {
+                return holder.getConfig().maxNearestConnections;
+            }
+
+            @Override
             public int pipelineIntervalSeconds() {
                 return holder.getConfig().pipelineIntervalSeconds;
             }

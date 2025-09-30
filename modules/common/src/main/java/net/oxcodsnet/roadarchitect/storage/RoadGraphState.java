@@ -12,6 +12,9 @@ import net.oxcodsnet.roadarchitect.util.GeometryUtils;
 import net.oxcodsnet.roadarchitect.util.KeyUtil;
 import net.oxcodsnet.roadarchitect.util.PersistentStateUtil;
 
+import java.util.*;
+import java.util.stream.Collectors;
+
 /**
  * Сохраняет узлы и рёбра дорог как {@link PersistentState}.
  * <p>Stores road nodes and edges as a {@link PersistentState}.</p>
@@ -87,20 +90,196 @@ public class RoadGraphState extends PersistentState {
     }
 
     /**
-     * Добавляет новый узел и сразу строит с ним все допустимые рёбра
+     * Добавляет новый узел и строит с ним оптимальные рёбра используя K-ближайших соседей
      *
      * @param pos позиция для нового узла
      * @return созданный узел
      */
     public Node addNodeWithEdges(BlockPos pos, String type) {
+        // Сначала найдем ближайших соседей ПЕРЕД добавлением нового узла
+        int maxConnections = RoadArchitect.CONFIG.maxNearestConnections();
+        List<Node> nearestNeighbors = findKNearestNeighborsForPosition(pos, maxConnections);
+        
+        // Теперь добавляем новый узел
         Node newNode = this.nodeStorage.add(pos, type);
-        for (Node other : this.nodeStorage.all().values()) {
-            if (!other.id().equals(newNode.id())) {
-                connect(newNode, other);
+        
+        System.out.println("[RoadArchitect] Adding node at " + pos + ", found " + nearestNeighbors.size() + " potential neighbors, maxConnections=" + maxConnections);
+        
+        // подключаем новый узел к ближайшим соседям
+        int connectionsAdded = 0;
+        for (Node neighbor : nearestNeighbors) {
+            // 额外的安全检查：确保不连接到自己
+            if (neighbor.pos().equals(newNode.pos())) {
+                System.out.println("[RoadArchitect] Skipping self-connection for " + newNode.pos());
+                continue;
             }
+            
+            double distance = Math.sqrt(distanceSquared(newNode.pos(), neighbor.pos()));
+            System.out.println("[RoadArchitect] Attempting to connect " + newNode.pos() + " to " + neighbor.pos() + " at distance " + distance);
+            
+            // 直接连接，不再使用canConnect检查，因为我们已经在findKNearestNeighbors中过滤了
+            edgeStorage.add(newNode, neighbor);
+            connectionsAdded++;
+            System.out.println("[RoadArchitect] Successfully connected " + newNode.pos() + " to " + neighbor.pos());
         }
+        
+        System.out.println("[RoadArchitect] Added " + connectionsAdded + " connections for node at " + pos);
+        
+        // Важно: обновляем существующие соединения с учетом нового узла
+        updateExistingConnections(newNode);
+        
         this.markDirty();
         return newNode;
+    }
+
+    /**
+     * 为指定位置找到K个最近的邻居节点（用于添加新节点前）
+     */
+    private List<Node> findKNearestNeighborsForPosition(BlockPos pos, int k) {
+        List<Node> neighbors = nodeStorage.all().values().stream()
+            .filter(n -> {
+                double dist = Math.sqrt(distanceSquared(pos, n.pos()));
+                return dist <= RoadArchitect.CONFIG.maxConnectionDistance(); // 只考虑距离内的节点
+            })
+            .sorted((a, b) -> Double.compare(
+                distanceSquared(pos, a.pos()),
+                distanceSquared(pos, b.pos())
+            ))
+            .limit(k)
+            .collect(Collectors.toList());
+        
+        System.out.println("[RoadArchitect] Found " + neighbors.size() + " valid neighbors within distance for " + pos);
+        return neighbors;
+    }
+
+    /**
+     * Находит K ближайших соседей для заданного узла
+     */
+    private List<Node> findKNearestNeighbors(Node target, int k) {
+        List<Node> neighbors = nodeStorage.all().values().stream()
+            .filter(n -> !n.id().equals(target.id())) // 排除自身
+            .filter(n -> {
+                double dist = Math.sqrt(distanceSquared(target.pos(), n.pos()));
+                return dist <= RoadArchitect.CONFIG.maxConnectionDistance(); // 只考虑距离内的节点
+            })
+            .sorted((a, b) -> Double.compare(
+                distanceSquared(target.pos(), a.pos()),
+                distanceSquared(target.pos(), b.pos())
+            ))
+            .limit(k)
+            .collect(Collectors.toList());
+        
+        System.out.println("[RoadArchitect] Found " + neighbors.size() + " valid neighbors within distance for " + target.pos());
+        return neighbors;
+    }
+
+    /**
+     * Вычисляет квадрат расстояния между двумя позициями (для оптимизации)
+     */
+    private double distanceSquared(BlockPos a, BlockPos b) {
+        double dx = a.getX() - b.getX();
+        double dz = a.getZ() - b.getZ();
+        return dx * dx + dz * dz;
+    }
+
+    /**
+     * Проверяет, можно ли соединить два узла (расстояние + пересечения)
+     */
+    private boolean canConnect(Node nodeA, Node nodeB) {
+        if (nodeA == null || nodeB == null) return false;
+        if (nodeA.id().equals(nodeB.id())) return false;
+
+        // Проверяем расстояние
+        double maxDist = RoadArchitect.CONFIG.maxConnectionDistance();
+        if (distanceSquared(nodeA.pos(), nodeB.pos()) > maxDist * maxDist) {
+            return false;
+        }
+
+        // Проверяем пересечения с существующими рёбрами
+        String idA = nodeA.id();
+        String idB = nodeB.id();
+        
+        for (EdgeStorage.Edge e : edgeStorage.all().values()) {
+            if (e.connects(idA) || e.connects(idB)) continue;
+            Node n1 = nodeStorage.all().get(e.nodeA());
+            Node n2 = nodeStorage.all().get(e.nodeB());
+            if (n1 == null || n2 == null) continue;
+
+            if (GeometryUtils.segmentsIntersect2D(nodeA.pos(), nodeB.pos(), n1.pos(), n2.pos())) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Обновляет существующие соединения с учетом нового узла
+     * Если новый узел ближе к существующему узлу, чем его текущие дальние соседи,
+     * заменяем соединение
+     */
+    private void updateExistingConnections(Node newNode) {
+        int maxConnections = RoadArchitect.CONFIG.maxNearestConnections();
+        
+        for (Node existing : nodeStorage.all().values()) {
+            if (existing.id().equals(newNode.id())) continue;
+            
+            // Получаем текущих соседей существующего узла
+            List<Node> currentNeighbors = getConnectedNeighbors(existing);
+            double distToNew = distanceSquared(existing.pos(), newNode.pos());
+            
+            // Если у узла уже максимум соединений, проверяем замену
+            if (currentNeighbors.size() >= maxConnections) {
+                Node farthest = getFarthestNeighbor(existing, currentNeighbors);
+                if (farthest != null) {
+                    double farthestDist = distanceSquared(existing.pos(), farthest.pos());
+                    
+                    // Если новый узел ближе и можно подключить, заменяем соединение
+                    if (distToNew < farthestDist && canConnect(existing, newNode)) {
+                        String edgeKey = KeyUtil.edgeKey(existing.id(), farthest.id());
+                        edgeStorage.remove(edgeKey);
+                        edgeStorage.add(existing, newNode);
+                    }
+                }
+            } else if (canConnect(existing, newNode)) {
+                // Если есть свободные слоты, просто добавляем соединение
+                edgeStorage.add(existing, newNode);
+            }
+        }
+    }
+
+    /**
+     * Получает список соседей, подключенных к данному узлу
+     */
+    private List<Node> getConnectedNeighbors(Node node) {
+        List<Node> neighbors = new ArrayList<>();
+        String nodeId = node.id();
+        
+        for (EdgeStorage.Edge edge : edgeStorage.all().values()) {
+            if (edge.connects(nodeId)) {
+                String otherId = edge.nodeA().equals(nodeId) ? edge.nodeB() : edge.nodeA();
+                Node other = nodeStorage.all().get(otherId);
+                if (other != null) {
+                    neighbors.add(other);
+                }
+            }
+        }
+        
+        return neighbors;
+    }
+
+    /**
+     * Находит самого дальнего соседа среди подключенных узлов
+     */
+    private Node getFarthestNeighbor(Node center, List<Node> neighbors) {
+        if (neighbors.isEmpty()) return null;
+        
+        return neighbors.stream()
+            .max((a, b) -> Double.compare(
+                distanceSquared(center.pos(), a.pos()),
+                distanceSquared(center.pos(), b.pos())
+            ))
+            .orElse(null);
     }
 
     /**

@@ -26,6 +26,11 @@ public final class RoadArchitect {
         }
 
         @Override
+        public int maxNearestConnections() {
+            return RAConfigHolder.get().maxNearestConnections();
+        }
+
+        @Override
         public int pipelineIntervalSeconds() {
             return RAConfigHolder.get().pipelineIntervalSeconds();
         }

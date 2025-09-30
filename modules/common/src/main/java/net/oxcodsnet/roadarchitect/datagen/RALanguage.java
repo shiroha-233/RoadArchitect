@@ -29,6 +29,9 @@ public final class RALanguage {
                 add.accept("text.config.roadarchitect.option.maxConnectionDistance", "Max Connection Distance");
                 add.accept("text.config.roadarchitect.option.maxConnectionDistance.@Tooltip",
                         "Maximum distance in blocks between two structures to connect them.");
+                add.accept("text.config.roadarchitect.option.maxNearestConnections", "Max Nearest Connections");
+                add.accept("text.config.roadarchitect.option.maxNearestConnections.@Tooltip",
+                        "Maximum number of nearest neighbors each node can connect to (K-nearest neighbors algorithm).");
                 add.accept("text.config.roadarchitect.option.pipelineIntervalSeconds", "Pipeline Interval Seconds");
                 add.accept("text.config.roadarchitect.option.pipelineIntervalSeconds.@Tooltip",
                         "Delay in seconds between pipeline runs.");
@@ -140,6 +143,9 @@ public final class RALanguage {
                         "Максимальная дистанция соединения");
                 add.accept("text.config.roadarchitect.option.maxConnectionDistance.@Tooltip",
                         "Максимальное расстояние в блоках между двумя структурами для соединения дорогой.");
+                add.accept("text.config.roadarchitect.option.maxNearestConnections", "Максимум ближайших соединений");
+                add.accept("text.config.roadarchitect.option.maxNearestConnections.@Tooltip",
+                        "Максимальное количество ближайших соседей, к которым может подключиться каждый узел (алгоритм K-ближайших соседей).");
                 add.accept("text.config.roadarchitect.option.pipelineIntervalSeconds",
                         "Интервал конвейера (сек)");
                 add.accept("text.config.roadarchitect.option.pipelineIntervalSeconds.@Tooltip",
@@ -606,6 +612,9 @@ public final class RALanguage {
                 add.accept("text.config.roadarchitect.option.maxConnectionDistance", "最大连接距离");
                 add.accept("text.config.roadarchitect.option.maxConnectionDistance.@Tooltip",
                         "两结构间允许连接的最大方块距离。");
+                add.accept("text.config.roadarchitect.option.maxNearestConnections", "最大邻居连接数");
+                add.accept("text.config.roadarchitect.option.maxNearestConnections.@Tooltip",
+                        "每个节点可连接的最近邻居数量上限（K-最近邻算法）。");
                 add.accept("text.config.roadarchitect.option.pipelineIntervalSeconds", "管线间隔（秒）");
                 add.accept("text.config.roadarchitect.option.pipelineIntervalSeconds.@Tooltip",
                         "每次管线运行之间的秒数。");

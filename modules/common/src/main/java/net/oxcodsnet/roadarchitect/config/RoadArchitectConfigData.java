@@ -17,7 +17,11 @@ public final class RoadArchitectConfigData implements ConfigData {
     public int chunkGenerateScanRadius = 20; // numeric field
 
     @ConfigEntry.Gui.Tooltip
-    public int maxConnectionDistance = 715; // numeric field
+    public int maxConnectionDistance = 400; // numeric field (降低默认值)
+
+    @ConfigEntry.BoundedDiscrete(min = 2, max = 6)
+    @ConfigEntry.Gui.Tooltip
+    public int maxNearestConnections = 3; // 每个节点最多连接的邻居数量
 
     @ConfigEntry.Gui.Tooltip
     public int pipelineIntervalSeconds = 120; // numeric field (seconds)

@@ -14,6 +14,8 @@ public interface RAConfig {
 
     int maxConnectionDistance();
 
+    int maxNearestConnections();
+
     int pipelineIntervalSeconds();
 
     int lampInterval();
