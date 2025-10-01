@@ -346,16 +346,38 @@ public final class StructureLocator {
     /* ───────────────────────────── Persistence ───────────────────────────── */
 
     private static void schedulePersistence(ServerWorld world, List<Pair<BlockPos, String>> found) {
-        if (found.isEmpty()) return;
+        if (found.isEmpty()) {
+            LOGGER.debug("No structures found in scan");
+            return;
+        }
+        
+        LOGGER.debug("Found {} structures, processing...", found.size());
         MinecraftServer server = world.getServer();
         server.execute(() -> {
             RoadGraphState graph = RoadGraphState.get(world);
+            
+            // 增量添加节点（每个节点自动连接到最近的节点）
+            int newNodesCount = 0;
+            int existingNodesCount = 0;
             for (Pair<BlockPos, String> pair : found) {
-                Node node = graph.addNodeWithEdges(pair.getFirst(), pair.getSecond());
-                if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("Added node {} at {} ({})", node.id(), node.pos(), pair.getSecond());
+                Node node = graph.addNode(pair.getFirst(), pair.getSecond());
+                if (node != null) {
+                    newNodesCount++;
+                    if (LOGGER.isDebugEnabled()) {
+                        LOGGER.debug("Added node {} at {} ({})", node.id(), node.pos(), pair.getSecond());
+                    }
+                } else {
+                    existingNodesCount++;
                 }
             }
+            
+            if (newNodesCount > 0) {
+                LOGGER.info("Added {} new nodes to road network (incremental)", newNodesCount);
+            }
+            if (existingNodesCount > 0) {
+                LOGGER.debug("{} nodes already exist, skipped", existingNodesCount);
+            }
+            
             graph.markDirty();
         });
     }

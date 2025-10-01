@@ -94,17 +94,67 @@ public class RoadGraphState extends PersistentState {
     }
 
     /**
-     * Добавляет новый узел и сразу строит с ним все допустимые рёбра
+     * 添加新节点并增量连接到现有网络。
+     * 使用 MST 策略：连接到最近的已有节点。
      *
-     * @param pos позиция для нового узла
-     * @return созданный узел
+     * @param pos 节点位置
+     * @param type 节点类型
+     * @return 创建的节点，如果节点已存在则返回 null
      */
-    public Node addNodeWithEdges(BlockPos pos, String type) {
+    public Node addNode(BlockPos pos, String type) {
+        // 检查该位置是否已有节点
+        for (Node existing : nodeStorage.all().values()) {
+            if (existing.pos().equals(pos)) {
+                return null; // 该位置已有节点，不添加
+            }
+        }
+        
         Node newNode = this.nodeStorage.add(pos, type);
-        // 使用新的蜂窝状连接算法重新计算所有连接
-        rebuildEdgesWithHoneycombAlgorithm();
+        
+        // 增量连接：找到最近的节点并连接
+        connectToNearestNode(newNode);
+        
         this.markDirty();
         return newNode;
+    }
+
+    /**
+     * 将新节点连接到最近的现有节点（MST 增量策略）。
+     * 
+     * @param newNode 新添加的节点
+     */
+    private void connectToNearestNode(Node newNode) {
+        Node nearestNode = null;
+        double minDistance = Double.MAX_VALUE;
+        
+        // 找到最近的节点
+        for (Node other : nodeStorage.all().values()) {
+            if (other.id().equals(newNode.id())) continue;
+            
+            double dx = newNode.pos().getX() - other.pos().getX();
+            double dz = newNode.pos().getZ() - other.pos().getZ();
+            double dist = Math.sqrt(dx * dx + dz * dz);
+            
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearestNode = other;
+            }
+        }
+        
+        // 连接到最近的节点
+        if (nearestNode != null) {
+            edgeStorage.add(newNode, nearestNode);
+            LOGGER.debug("Connected new node {} to nearest node {} (distance: {:.1f})", 
+                newNode.id(), nearestNode.id(), minDistance);
+        }
+    }
+
+    /**
+     * @deprecated 不再使用，改用增量添加
+     */
+    @Deprecated
+    public Node addNodeWithEdges(BlockPos pos, String type) {
+        return addNode(pos, type);
     }
 
     /**
@@ -172,65 +222,6 @@ public class RoadGraphState extends PersistentState {
             oldEdgeCount, addedCount, restoredCount);
     }
 
-    /**
-     * 检查新边是否会与现有边交叉。
-     */
-    private boolean wouldIntersectExistingEdges(Node nodeA, Node nodeB) {
-        for (EdgeStorage.Edge e : edgeStorage.all().values()) {
-            if (e.connects(nodeA.id()) || e.connects(nodeB.id())) continue;
-            Node n1 = nodeStorage.all().get(e.nodeA());
-            Node n2 = nodeStorage.all().get(e.nodeB());
-            if (n1 == null || n2 == null) continue;
-
-            if (GeometryUtils.segmentsIntersect2D(nodeA.pos(), nodeB.pos(), n1.pos(), n2.pos())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Пытается соединить два узла, запрещая «крестовые» рёбра.
-     */
-    public void connect(Node nodeA, Node nodeB) {
-        if (nodeA == null || nodeB == null) {
-            return;
-        }
-        String idNodeA = nodeA.id();
-        String idNodeB = nodeB.id();
-        if (idNodeA.equals(idNodeB)) {
-            return;
-        }
-
-        // 1) проверяем радиус
-        double dx = nodeA.pos().getX() - nodeB.pos().getX();
-        double dz = nodeA.pos().getZ() - nodeB.pos().getZ();
-        double max = edgeStorage.radius() * 2.0;
-        if (dx * dx + dz * dz > max * max) {
-            return;
-        }
-
-        // 2) уже существует?
-        if (edgeStorage.all().containsKey(KeyUtil.edgeKey(idNodeA, idNodeB))) {
-            return;
-        }
-
-        // 3) пересекает ли новое ребро какие-нибудь существующие?
-        for (EdgeStorage.Edge e : edgeStorage.all().values()) {
-            if (e.connects(idNodeA) || e.connects(idNodeB)) continue;
-            Node n1 = nodeStorage.all().get(e.nodeA());
-            Node n2 = nodeStorage.all().get(e.nodeB());
-            if (n1 == null || n2 == null) continue;
-
-            if (GeometryUtils.segmentsIntersect2D(nodeA.pos(), nodeB.pos(), n1.pos(), n2.pos())) {
-                return;
-            }
-        }
-
-        // 4) всё чисто — делегируем фактическое создание
-        boolean added = edgeStorage.add(nodeA, nodeB);
-        if (added) this.markDirty();
-    }
 
     /**
      * Сохраняет состояние в NBT.
